@@ -372,20 +372,19 @@ function YouTubePlayer({ videoId, socket, roomId, participantId, playback, isHos
   return (
     <div className="absolute inset-0 bg-black">
       <div className="absolute inset-0 overflow-hidden" ref={hostRef} />
-      {!isHost ? <div className="absolute inset-0 z-10" /> : null}
       {playerError ? (
         <div className="absolute inset-0 z-20 grid place-items-center bg-[#090d16] px-6 text-center text-sm text-slate-300">
           {playerError}
         </div>
       ) : null}
-      {needsInteraction && !playerError && isHost ? (
+      {needsInteraction && !playerError ? (
         <button
           className="absolute inset-0 z-10 grid place-items-center bg-black/60 px-6 text-center"
           onClick={handleEnablePlayback}
           type="button"
         >
           <span className="rounded-lg border border-white/20 bg-panel/95 px-6 py-4 text-sm font-semibold text-white shadow-xl">
-            Click to play & sync
+            {isHost ? 'Click to play & sync' : 'Click to enable playback'}
           </span>
         </button>
       ) : null}

@@ -35,8 +35,6 @@ function RoomPlaceholder() {
   const clearSession = useRoomStore((state) => state.clearSession);
   const screenShareRef = useRef(null);
   const chatEndRef = useRef(null);
-  const chatInputRef = useRef(null);
-  const scrollYRef = useRef(0);
   const inviteLink = useMemo(() => window.location.href, []);
   const isHost = currentParticipant?.id === currentRoom?.hostId;
   const youtubeVideoId =
@@ -137,20 +135,6 @@ function RoomPlaceholder() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentRoom?.messages]);
-
-  useEffect(() => {
-    return () => {
-      // cleanup: ensure body scroll restored if component unmounts while locked
-      try {
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.left = '';
-        document.body.style.right = '';
-      } catch (e) {
-        // ignore
-      }
-    };
-  }, []);
 
   const handleJoin = async (event) => {
     event.preventDefault();
@@ -327,32 +311,6 @@ function RoomPlaceholder() {
       setChatText('');
     } catch (err) {
       setError(err.message);
-    }
-  };
-
-  const handleChatFocus = () => {
-    try {
-      if (window.innerWidth >= 768) return; // only on small screens
-      scrollYRef.current = window.scrollY || window.pageYOffset || 0;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollYRef.current}px`;
-      document.body.style.left = '0';
-      document.body.style.right = '0';
-    } catch (e) {
-      // ignore
-    }
-  };
-
-  const handleChatBlur = () => {
-    try {
-      if (window.innerWidth >= 768) return;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.left = '';
-      document.body.style.right = '';
-      window.scrollTo(0, scrollYRef.current);
-    } catch (e) {
-      // ignore
     }
   };
 
@@ -578,9 +536,6 @@ function RoomPlaceholder() {
                     Message
                   </label>
                   <input
-                    ref={chatInputRef}
-                    onFocus={handleChatFocus}
-                    onBlur={handleChatBlur}
                     className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-3 text-sm text-white placeholder:text-slate-500"
                     id="chat-message"
                     maxLength={500}
