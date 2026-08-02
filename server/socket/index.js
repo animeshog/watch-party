@@ -1,6 +1,7 @@
 import {
   addRoomMessage,
   getRoom,
+  removeRoomParticipant,
   serializeRoom,
   updateRoomMedia,
   updateYoutubePlayback,
@@ -80,10 +81,44 @@ export function registerSocketHandlers(io) {
       });
     });
 
-    socket.on('disconnect', () => {
-      if (socket.data.roomId && socket.data.participantId) {
-        untrackParticipantSocket(socket.data.roomId, socket.data.participantId);
+    const handleLeave = () => {
+      if (!socket.data.roomId || !socket.data.participantId) {
+        return;
       }
+
+      const result = removeRoomParticipant({
+        roomId: socket.data.roomId,
+        participantId: socket.data.participantId,
+      });
+
+      if (!result) {
+        return;
+      }
+
+      const { room, participant } = result;
+      addRoomMessage({
+        roomId: room.id,
+        participantId: participant.id,
+        text: 'left the room.',
+      });
+
+      untrackParticipantSocket(room.id, participant.id);
+      socket.leave(room.id);
+      socket.data.roomId = null;
+      socket.data.participantId = null;
+
+      io.to(room.id).emit('room:updated', { room: serializeRoom(room) });
+    };
+
+    socket.on('room:leave', ({ roomId }) => {
+      if (!socket.data.participantId || socket.data.roomId !== roomId) {
+        return;
+      }
+      handleLeave();
+    });
+
+    socket.on('disconnect', () => {
+      handleLeave();
     });
 
     socket.on('youtube:playback', ({ roomId, action, currentTime, videoId }) => {
@@ -101,14 +136,11 @@ export function registerSocketHandlers(io) {
         return;
       }
 
-      // Only the host can load / change the video; anyone can control playback.
-      if (action === 'load') {
-        const participant = room.participants.find(
-          (user) => user.id === socket.data.participantId,
-        );
-        if (!participant || (participant.role !== 'host' && participant.id !== room.hostId)) {
-          return;
-        }
+      const participant = room.participants.find(
+        (user) => user.id === socket.data.participantId,
+      );
+      if (!participant || (participant.role !== 'host' && participant.id !== room.hostId)) {
+        return;
       }
 
       const updated = updateYoutubePlayback({

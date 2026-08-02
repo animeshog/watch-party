@@ -11,7 +11,7 @@ const PlayerState = {
 const DRIFT_SEEK_SECONDS = 1.25;
 const REMOTE_GUARD_MS = 800;
 
-function YouTubePlayer({ videoId, socket, roomId, participantId, playback }) {
+function YouTubePlayer({ videoId, socket, roomId, participantId, playback, isHost }) {
   const hostRef = useRef(null);
   const playerRef = useRef(null);
   const isApplyingRemoteRef = useRef(false);
@@ -45,7 +45,7 @@ function YouTubePlayer({ videoId, socket, roomId, participantId, playback }) {
 
   const broadcastPlayback = useCallback(
     (action, currentTime) => {
-      if (shouldIgnoreLocalEvents()) {
+      if (!isHost || shouldIgnoreLocalEvents()) {
         return;
       }
 
@@ -179,7 +179,8 @@ function YouTubePlayer({ videoId, socket, roomId, participantId, playback }) {
           height: '100%',
           playerVars: {
             autoplay: 0,
-            controls: 1,
+            controls: isHost ? 1 : 0,
+            disablekb: isHost ? 0 : 1,
             rel: 0,
             modestbranding: 1,
             enablejsapi: 1,
@@ -227,6 +228,10 @@ function YouTubePlayer({ videoId, socket, roomId, participantId, playback }) {
               const player = event.target;
               const state = event.data;
               const currentTime = player.getCurrentTime() || 0;
+
+              if (!isHost) {
+                return;
+              }
 
               if (state === PlayerState.PLAYING) {
                 setNeedsInteraction(false);
@@ -339,19 +344,29 @@ function YouTubePlayer({ videoId, socket, roomId, participantId, playback }) {
 
     player.unMute();
     player.setVolume(100);
-    player.playVideo();
+
+    if (isHost) {
+      player.playVideo();
+    } else if (playback?.youtubeIsPlaying) {
+      player.playVideo();
+    } else {
+      player.pauseVideo();
+    }
+
     setNeedsInteraction(false);
 
     const currentTime = player.getCurrentTime?.() || 0;
-    // Force a local play broadcast after user gesture.
     remoteGuardUntilRef.current = 0;
     isApplyingRemoteRef.current = false;
-    socket?.emit('youtube:playback', {
-      roomId,
-      action: 'play',
-      currentTime,
-      videoId,
-    });
+
+    if (isHost) {
+      socket?.emit('youtube:playback', {
+        roomId,
+        action: 'play',
+        currentTime,
+        videoId,
+      });
+    }
   };
 
   return (
@@ -369,7 +384,7 @@ function YouTubePlayer({ videoId, socket, roomId, participantId, playback }) {
           type="button"
         >
           <span className="rounded-lg border border-white/20 bg-panel/95 px-6 py-4 text-sm font-semibold text-white shadow-xl">
-            Click to play & sync
+            {isHost ? 'Click to play & sync' : 'Click to enable playback'}
           </span>
         </button>
       ) : null}

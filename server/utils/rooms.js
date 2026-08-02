@@ -49,12 +49,43 @@ export function joinRoom({ roomId, name }) {
   const participant = {
     id: randomUUID(),
     name: name?.trim() || 'Guest',
-    role: 'participant',
+    role: room.participants.length === 0 ? 'host' : 'participant',
     micMuted: false,
   };
 
+  if (room.participants.length === 0) {
+    room.hostId = participant.id;
+  }
+
   room.participants.push(participant);
   return { room, participant };
+}
+
+export function removeRoomParticipant({ roomId, participantId }) {
+  const room = getRoom(roomId);
+
+  if (!room) {
+    return null;
+  }
+
+  const participantIndex = room.participants.findIndex((user) => user.id === participantId);
+  if (participantIndex === -1) {
+    return null;
+  }
+
+  const [removedParticipant] = room.participants.splice(participantIndex, 1);
+
+  if (removedParticipant.id === room.hostId) {
+    if (room.participants.length > 0) {
+      const newHost = room.participants[0];
+      newHost.role = 'host';
+      room.hostId = newHost.id;
+    } else {
+      room.hostId = null;
+    }
+  }
+
+  return { room, participant: removedParticipant };
 }
 
 export function serializeRoom(room) {

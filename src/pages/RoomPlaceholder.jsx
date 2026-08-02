@@ -32,6 +32,7 @@ function RoomPlaceholder() {
   const [socket, setSocket] = useState(null);
   const videoRef = useRef(null);
   const socketRef = useRef(null);
+  const clearSession = useRoomStore((state) => state.clearSession);
   const screenShareRef = useRef(null);
   const chatEndRef = useRef(null);
   const inviteLink = useMemo(() => window.location.href, []);
@@ -150,6 +151,46 @@ function RoomPlaceholder() {
       setIsJoining(false);
     }
   };
+
+  const handleLeaveRoom = async () => {
+    if (!currentParticipant) {
+      navigate('/');
+      return;
+    }
+
+    const confirmed = window.confirm('Are you sure you want to leave the room?');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      socketRef.current?.emit('room:leave', { roomId });
+    } catch {
+      // best effort
+    }
+
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    setSocket(null);
+    clearSession();
+    navigate('/');
+  };
+
+  useEffect(() => {
+    if (!currentParticipant) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentParticipant]);
 
   const saveMediaUpdate = async (media) => {
     const response = await updateRoomMedia(roomId, currentParticipant.id, media);
@@ -276,14 +317,23 @@ function RoomPlaceholder() {
   return (
     <main className="min-h-screen bg-midnight px-4 py-4 text-slate-100 sm:px-6">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl flex-col">
-        <header className="flex items-center justify-between py-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 py-3">
           <BrandLogo />
-          <Link
-            className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/25 hover:bg-white/10"
-            to="/"
-          >
-            Back
-          </Link>
+          <div className="flex gap-3">
+            <button
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/25 hover:bg-white/10"
+              type="button"
+              onClick={handleLeaveRoom}
+            >
+              Leave Room
+            </button>
+            <Link
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/25 hover:bg-white/10"
+              to="/"
+            >
+              Back
+            </Link>
+          </div>
         </header>
 
         {error ? (
@@ -323,54 +373,56 @@ function RoomPlaceholder() {
             </form>
           </section>
         ) : (
-          <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[1fr_340px]">
-            <div className="overflow-hidden rounded-lg border border-white/10 bg-black shadow-2xl shadow-black/30 max-lg:sticky max-lg:top-0 max-lg:z-30 max-lg:-mx-4 max-lg:w-[calc(100%+2rem)] max-lg:rounded-none max-lg:border-x-0 max-lg:border-t-0 max-lg:shadow-none lg:col-start-1 lg:row-start-1">
-              <div className="relative aspect-video bg-[#090d16]">
-                {(localScreenStream || remoteScreenStream) ? (
-                  <video
-                    autoPlay
-                    className="h-full w-full bg-black object-contain"
-                    muted={Boolean(localScreenStream)}
-                    playsInline
-                    ref={videoRef}
-                  />
-                ) : currentRoom?.media?.mode === 'youtube' && youtubeVideoId ? (
-                  <YouTubePlayer
-                    participantId={currentParticipant.id}
-                    playback={currentRoom.media}
-                    roomId={roomId}
-                    socket={socket}
-                    videoId={youtubeVideoId}
-                  />
-                ) : currentRoom?.media?.mode === 'screen' ? (
-                  <div className="grid h-full place-items-center px-6 text-center text-slate-300">
-                    <div>
-                      <p className="text-xl font-semibold text-white">Connecting to screen share</p>
-                      <p className="mt-2 text-sm">
-                        {currentRoom.media.sharedBy
-                          ? `Waiting for ${currentRoom.media.sharedBy}'s stream...`
-                          : 'Waiting for the shared screen...'}
-                      </p>
+          <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[1fr_340px] lg:h-[calc(100vh-5rem)]">
+            <div className="sticky top-0 z-10 lg:static lg:top-4 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:space-y-4">
+              <div className="overflow-hidden rounded-lg border border-white/10 bg-black shadow-2xl shadow-black/30 lg:rounded-lg lg:border lg:border-white/10 lg:shadow-2xl">
+                <div className="relative aspect-video bg-[#090d16]">
+                  {(localScreenStream || remoteScreenStream) ? (
+                    <video
+                      autoPlay
+                      className="h-full w-full bg-black object-contain"
+                      muted={Boolean(localScreenStream)}
+                      playsInline
+                      ref={videoRef}
+                    />
+                  ) : currentRoom?.media?.mode === 'youtube' && youtubeVideoId ? (
+                    <YouTubePlayer
+                      isHost={isHost}
+                      participantId={currentParticipant.id}
+                      playback={currentRoom.media}
+                      roomId={roomId}
+                      socket={socket}
+                      videoId={youtubeVideoId}
+                    />
+                  ) : currentRoom?.media?.mode === 'screen' ? (
+                    <div className="grid h-full place-items-center px-6 text-center text-slate-300">
+                      <div>
+                        <p className="text-xl font-semibold text-white">Connecting to screen share</p>
+                        <p className="mt-2 text-sm">
+                          {currentRoom.media.sharedBy
+                            ? `Waiting for ${currentRoom.media.sharedBy}'s stream...`
+                            : 'Waiting for the shared screen...'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="grid h-full place-items-center px-6 text-center text-slate-400">
-                    <div>
-                      <p className="text-xl font-semibold text-white">Nothing is playing yet</p>
-                      <p className="mt-2 text-sm">
-                        {isHost
-                          ? 'Paste a YouTube link below, or share your screen.'
-                          : 'Waiting for the host to start a video or share a screen.'}
-                      </p>
+                  ) : (
+                    <div className="grid h-full place-items-center px-6 text-center text-slate-400">
+                      <div>
+                        <p className="text-xl font-semibold text-white">Nothing is playing yet</p>
+                        <p className="mt-2 text-sm">
+                          {isHost
+                            ? 'Paste a YouTube link below, or share your screen.'
+                            : 'Waiting for the host to start a video or share a screen.'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-lg border border-white/10 bg-panel/80 p-4 lg:col-start-1 lg:row-start-2">
-                {isHost ? (
-                  <form className="mb-4 flex flex-col gap-3 sm:flex-row" onSubmit={handleLoadYoutube}>
+              <div className="rounded-lg border border-white/10 bg-panel/80 p-4">
+                  {isHost ? (
+                    <form className="mb-4 flex flex-col gap-3 sm:flex-row" onSubmit={handleLoadYoutube}>
                     <label className="sr-only" htmlFor="youtube-url">
                       YouTube link
                     </label>
@@ -401,8 +453,7 @@ function RoomPlaceholder() {
                   </form>
                 ) : currentRoom?.media?.mode === 'youtube' ? (
                   <p className="mb-4 text-sm text-slate-400">
-                    Anyone can pause, play, or scrub the timeline — playback stays synced over
-                    WebSockets.
+                    The host controls playback for this video. You will stay synced automatically.
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-3">
@@ -422,8 +473,9 @@ function RoomPlaceholder() {
                   </button>
                 </div>
               </div>
+            </div>
 
-            <aside className="grid min-h-[560px] gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:grid-rows-[auto_1fr]">
+            <aside className="grid min-h-[560px] gap-4 lg:col-start-2 lg:row-start-1 lg:grid-rows-[auto_1fr] lg:h-[calc(100vh-5rem)] lg:overflow-hidden">
               <div className="rounded-lg border border-white/10 bg-panel/80 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold text-white">Participants</h2>
@@ -452,30 +504,32 @@ function RoomPlaceholder() {
 
               <div className="flex min-h-0 flex-col rounded-lg border border-white/10 bg-panel/80 p-5">
                 <h2 className="text-lg font-semibold text-white">Chat</h2>
-                <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                  {currentRoom?.messages?.length ? (
-                    currentRoom.messages.map((message) => (
-                      <div className="rounded-lg bg-white/[0.06] px-3 py-2" key={message.id}>
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="truncate text-sm font-semibold text-white">
-                            {message.username}
+                <div className="mt-4 min-h-0 flex-1 overflow-hidden">
+                  <div className="h-full space-y-3 overflow-y-auto pr-1">
+                    {currentRoom?.messages?.length ? (
+                      currentRoom.messages.map((message) => (
+                        <div className="rounded-lg bg-white/[0.06] px-3 py-2" key={message.id}>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {message.username}
+                            </p>
+                            <time className="shrink-0 text-xs text-slate-500">
+                              {new Date(message.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </time>
+                          </div>
+                          <p className="mt-1 break-words text-sm leading-6 text-slate-300">
+                            {message.text}
                           </p>
-                          <time className="shrink-0 text-xs text-slate-500">
-                            {new Date(message.createdAt).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </time>
                         </div>
-                        <p className="mt-1 break-words text-sm leading-6 text-slate-300">
-                          {message.text}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">No messages yet.</p>
-                  )}
-                  <div ref={chatEndRef} />
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500">No messages yet.</p>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
                 </div>
                 <form className="mt-4 flex gap-2" onSubmit={handleSendMessage}>
                   <label className="sr-only" htmlFor="chat-message">

@@ -9,5 +9,6 @@ export const useRoomStore = create((set) => ({
   setRoomCode: (roomCode) => set({ roomCode: roomCode.trim().toUpperCase() }),
   setSession: ({ room, participant }) =>
     set({ currentRoom: room, currentParticipant: participant, roomCode: room.id }),
+  clearSession: () => set({ currentRoom: null, currentParticipant: null, roomCode: '' }),
   updateRoom: (room) => set({ currentRoom: room }),
 }));
